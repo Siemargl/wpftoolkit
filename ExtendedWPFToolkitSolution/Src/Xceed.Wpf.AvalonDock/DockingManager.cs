@@ -2,10 +2,11 @@
    
    Toolkit for WPF
 
-   Copyright (C) 2007-2018 Xceed Software Inc.
+   Copyright (C) 2007-2020 Xceed Software Inc.
 
-   This program is provided to you under the terms of the Microsoft Public
-   License (Ms-PL) as published at http://wpftoolkit.codeplex.com/license 
+   This program is provided to you under the terms of the XCEED SOFTWARE, INC.
+   COMMUNITY LICENSE AGREEMENT (for non-commercial use) as published at 
+   https://github.com/xceedsoftware/wpftoolkit/blob/master/license.md 
 
    For more features, controls, and fast professional support,
    pick up the Plus Edition at https://xceed.com/xceed-toolkit-plus-for-wpf/
@@ -31,6 +32,9 @@ using System.Windows.Data;
 using System.Windows.Threading;
 using Xceed.Wpf.AvalonDock.Themes;
 using System.Diagnostics;
+using System.Windows.Media;
+using System.Windows.Controls.Primitives;
+using System.Globalization;
 
 namespace Xceed.Wpf.AvalonDock
 {
@@ -82,6 +86,10 @@ namespace Xceed.Wpf.AvalonDock
     #endregion
 
     #region Properties
+
+
+
+
 
 
 
@@ -1925,9 +1933,9 @@ namespace Xceed.Wpf.AvalonDock
 
     #endregion
 
-    #region Private Properties
+    #region Internal Properties
 
-    private bool IsNavigatorWindowActive
+    internal bool IsNavigatorWindowActive
     {
       get
       {
@@ -1976,6 +1984,48 @@ namespace Xceed.Wpf.AvalonDock
       base.OnPreviewKeyDown( e );
     }
 
+    protected override void OnKeyDown( KeyEventArgs e )
+    {
+      if( Keyboard.IsKeyDown( Key.LeftShift ) || Keyboard.IsKeyDown( Key.RightShift ) )
+      {
+        if( e.IsDown && Keyboard.IsKeyDown( Key.F10 ) )
+        {
+          var current = this.ActiveContent as DependencyObject;
+          while( current != null )
+          {
+            current = VisualTreeHelper.GetParent( current );
+            if( ( current is LayoutDocumentControl ) || ( current is LayoutAnchorableControl ) )
+              break;
+          }
+
+          if( current != null )
+          {
+            var ldc = current as LayoutDocumentControl;
+            if( ( ldc != null ) && ( this.DocumentContextMenu != null ) )
+            {
+              this.DocumentContextMenu.PlacementTarget = ldc;
+              this.DocumentContextMenu.Placement = PlacementMode.Relative;
+              this.DocumentContextMenu.DataContext = ldc.LayoutItem;
+              this.DocumentContextMenu.IsOpen = true;
+            }
+            else
+            {
+              var lac = current as LayoutAnchorableControl;
+              if( ( lac != null ) && ( this.AnchorableContextMenu != null) )
+              {
+                this.AnchorableContextMenu.PlacementTarget = lac;
+                this.AnchorableContextMenu.Placement = PlacementMode.Relative;
+                this.AnchorableContextMenu.DataContext = lac.LayoutItem;
+                this.AnchorableContextMenu.Opened += this.AnchorableContextMenu_Opened;
+                this.AnchorableContextMenu.IsOpen = true;
+              }
+            }
+          }
+        }
+      }
+      base.OnKeyDown( e );
+    }
+
     #endregion
 
     #region Public Methods
@@ -1987,6 +2037,8 @@ namespace Xceed.Wpf.AvalonDock
     /// <returns>Either a LayoutAnchorableItem or LayoutDocumentItem which contains the LayoutContent passed as argument</returns>
     public LayoutItem GetLayoutItemFromModel( LayoutContent content )
     {
+      if( _layoutItems == null )
+        return null;
       return _layoutItems.FirstOrDefault( item => item.LayoutElement == content );
     }
 
@@ -2068,7 +2120,7 @@ namespace Xceed.Wpf.AvalonDock
         };
         newFW.SetParentToMainWindowOf( this );
 
-        var paneForExtensions = modelFW.RootPanel.Children.OfType<LayoutAnchorablePane>().FirstOrDefault();
+        var paneForExtensions = modelFW.RootPanel.Descendents().OfType<LayoutAnchorablePane>().FirstOrDefault();
         if( paneForExtensions != null )
         {
           //ensure that floating window position is inside current (or nearest) monitor
@@ -2172,6 +2224,9 @@ namespace Xceed.Wpf.AvalonDock
 
     internal void StartDraggingFloatingWindowForContent( LayoutContent contentModel, bool startDrag = true )
     {
+      if( ( contentModel == null) || !contentModel.CanFloat )
+        return;
+
       var fwc = this.CreateFloatingWindow( contentModel, false );
       if( fwc != null )
       {
@@ -2308,6 +2363,21 @@ namespace Xceed.Wpf.AvalonDock
     internal void _ExecuteContentActivateCommand( LayoutContent content )
     {
       content.IsActive = true;
+    }
+
+    internal void ShowNavigatorWindow()
+    {
+      if( _navigatorWindow == null )
+      {
+        _navigatorWindow = new NavigatorWindow( this )
+        {
+          Owner = Window.GetWindow( this ),
+          WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+      }
+
+      _navigatorWindow.ShowDialog();
+      _navigatorWindow = null;
     }
 
     #endregion
@@ -2497,8 +2567,9 @@ namespace Xceed.Wpf.AvalonDock
 
         var documentToImport = new LayoutDocument()
         {
-          Content = documentContentToImport
-        };
+          Content = documentContentToImport,
+          ContentId = Guid.NewGuid().ToString()
+      };
 
         bool added = false;
         if( LayoutUpdateStrategy != null )
@@ -2728,7 +2799,8 @@ namespace Xceed.Wpf.AvalonDock
       {
         var anchorableToImport = new LayoutAnchorable()
         {
-          Content = anchorableContentToImport
+          Content = anchorableContentToImport,
+          ContentId = Guid.NewGuid().ToString()
         };
 
         bool added = false;
@@ -3086,21 +3158,6 @@ namespace Xceed.Wpf.AvalonDock
 
     }
 
-    private void ShowNavigatorWindow()
-    {
-      if( _navigatorWindow == null )
-      {
-        _navigatorWindow = new NavigatorWindow( this )
-        {
-          Owner = Window.GetWindow( this ),
-          WindowStartupLocation = WindowStartupLocation.CenterOwner
-        };
-      }
-
-      _navigatorWindow.ShowDialog();
-      _navigatorWindow = null;
-    }
-
     private LayoutFloatingWindowControl CreateFloatingWindowForLayoutAnchorableWithoutParent( LayoutAnchorablePane paneModel, bool isContentImmutable )
     {
       if( paneModel.Children.Any( c => !c.CanFloat ) )
@@ -3294,7 +3351,20 @@ namespace Xceed.Wpf.AvalonDock
       return fwc;
     }
 
-#endregion
+    private void AnchorableContextMenu_Opened( object sender, RoutedEventArgs e )
+    {
+      var anchorableContextMenu = sender as ContextMenu;
+      if( anchorableContextMenu != null )
+      {
+        if( anchorableContextMenu.PlacementTarget is Control )
+        {
+          anchorableContextMenu.VerticalOffset = ( (Control)anchorableContextMenu.PlacementTarget ).ActualHeight - anchorableContextMenu.ActualHeight;
+        }
+        this.AnchorableContextMenu.Opened -= this.AnchorableContextMenu_Opened;
+      }
+    }
+
+    #endregion
 
     #region Events
 
@@ -3360,32 +3430,46 @@ namespace Xceed.Wpf.AvalonDock
       if( _areas != null )
         return _areas;
 
+      var draggingWindowManager = draggingWindow.Model.Root.Manager;
       bool isDraggingDocuments = draggingWindow.Model is LayoutDocumentFloatingWindow;
 
       _areas = new List<IDropArea>();
 
       if( !isDraggingDocuments )
       {
-        _areas.Add( new DropArea<DockingManager>(
-            this,
-            DropAreaType.DockingManager ) );
+        if( draggingWindowManager == this )
+        {
+          _areas.Add( new DropArea<DockingManager>(
+          this,
+          DropAreaType.DockingManager ) );
+        }
 
         foreach( var areaHost in this.FindVisualChildren<LayoutAnchorablePaneControl>() )
         {
           if( areaHost.Model.Descendents().Any() )
           {
-            _areas.Add( new DropArea<LayoutAnchorablePaneControl>(
+            if( draggingWindowManager == areaHost.Model.Root.Manager )
+            {
+              _areas.Add( new DropArea<LayoutAnchorablePaneControl>(
                 areaHost,
                 DropAreaType.AnchorablePane ) );
+            }
           }
         }
       }
 
       foreach( var areaHost in this.FindVisualChildren<LayoutDocumentPaneControl>() )
       {
-        _areas.Add( new DropArea<LayoutDocumentPaneControl>(
-            areaHost,
-            DropAreaType.DocumentPane ) );
+        if( isDraggingDocuments
+          || ( !isDraggingDocuments && draggingWindow.Model.Descendents().OfType<LayoutAnchorable>().All( x => x.CanDockAsTabbedDocument ) ) )
+        {
+          if( draggingWindowManager == areaHost.Model.Root.Manager )
+          {
+            _areas.Add( new DropArea<LayoutDocumentPaneControl>(
+              areaHost,
+              DropAreaType.DocumentPane ) );
+          }
+        }
       }
 
       foreach( var areaHost in this.FindVisualChildren<LayoutDocumentPaneGroupControl>() )
@@ -3393,9 +3477,12 @@ namespace Xceed.Wpf.AvalonDock
         var documentGroupModel = areaHost.Model as LayoutDocumentPaneGroup;
         if( documentGroupModel.Children.Where( c => c.IsVisible ).Count() == 0 )
         {
-          _areas.Add( new DropArea<LayoutDocumentPaneGroupControl>(
+          if( draggingWindowManager == areaHost.Model.Root.Manager )
+          {
+            _areas.Add( new DropArea<LayoutDocumentPaneGroupControl>(
               areaHost,
               DropAreaType.DocumentPaneGroup ) );
+          }
         }
       }
 

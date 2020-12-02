@@ -2,10 +2,11 @@
    
    Toolkit for WPF
 
-   Copyright (C) 2007-2018 Xceed Software Inc.
+   Copyright (C) 2007-2020 Xceed Software Inc.
 
-   This program is provided to you under the terms of the Microsoft Public
-   License (Ms-PL) as published at http://wpftoolkit.codeplex.com/license 
+   This program is provided to you under the terms of the XCEED SOFTWARE, INC.
+   COMMUNITY LICENSE AGREEMENT (for non-commercial use) as published at 
+   https://github.com/xceedsoftware/wpftoolkit/blob/master/license.md 
 
    For more features, controls, and fast professional support,
    pick up the Plus Edition at https://xceed.com/xceed-toolkit-plus-for-wpf/
@@ -277,13 +278,13 @@ namespace Xceed.Wpf.AvalonDock.Layout
       }
     }
 
-    protected ILayoutContainer PreviousContainer
+    public ILayoutContainer PreviousContainer
     {
       get
       {
         return ( ( ILayoutPreviousContainer )this ).PreviousContainer;
       }
-      set
+      protected set
       {
         ( ( ILayoutPreviousContainer )this ).PreviousContainer = value;
       }
@@ -296,13 +297,13 @@ namespace Xceed.Wpf.AvalonDock.Layout
       set;
     }
 
-    protected string PreviousContainerId
+    public string PreviousContainerId
     {
       get
       {
         return ( ( ILayoutPreviousContainer )this ).PreviousContainerId;
       }
-      set
+      protected set
       {
         ( ( ILayoutPreviousContainer )this ).PreviousContainerId = value;
       }
@@ -494,6 +495,11 @@ namespace Xceed.Wpf.AvalonDock.Layout
     }
 
     #endregion
+
+
+
+
+
 
     #region IconSource
 
@@ -700,11 +706,10 @@ namespace Xceed.Wpf.AvalonDock.Layout
         writer.WriteAttributeString( "FloatingWidth", FloatingWidth.ToString( CultureInfo.InvariantCulture ) );
       if( FloatingHeight != 0.0 )
         writer.WriteAttributeString( "FloatingHeight", FloatingHeight.ToString( CultureInfo.InvariantCulture ) );
-
       if( IsMaximized )
         writer.WriteAttributeString( "IsMaximized", IsMaximized.ToString() );
-      if( !CanClose )
-        writer.WriteAttributeString( "CanClose", CanClose.ToString() );
+      // Always serialize CanClose because the default value is different for LayoutAnchorable vs LayoutDocument.
+      writer.WriteAttributeString( "CanClose", CanClose.ToString() );
       if( !CanFloat )
         writer.WriteAttributeString( "CanFloat", CanFloat.ToString() );
 
@@ -781,6 +786,14 @@ namespace Xceed.Wpf.AvalonDock.Layout
         throw new InvalidOperationException();
       if( Parent is LayoutDocumentPane )
         return;
+
+      if( this is LayoutAnchorable )
+      {
+        if( ( (LayoutAnchorable)this ).CanClose )
+        {
+          ( (LayoutAnchorable)this ).SetCanCloseInternal( true );
+        }
+      }
 
       if( PreviousContainer is LayoutDocumentPane )
       {
